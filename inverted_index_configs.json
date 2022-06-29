@@ -1,0 +1,6 @@
+[
+    {
+        "input_dir": "~/Data/project_WIP/tokenized_samples/example",
+        "output_dir": "~/Data/project_WIP/inverted_index/example"
+    }
+]
