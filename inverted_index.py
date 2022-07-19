@@ -1,23 +1,28 @@
-""" From a tokenised set create an inverted index. 
-    Each tokenized collection assumed to be of the form:
+""" Create an inverted index 
+
+    Each tokenized (.json) collection assumed to be of the form:
 
     [
-        # document 
         [
-            label,
-            list of tokenised sentences as lists
-        ],
+            document label::str,
+            [
+                [], # sentence as a list of tokens
+                ...
+            ]  # list of sentences
+        ], # document in the collection 
         ...
-    ]
+    ]  # collection
 
-    Returning:
+    Returning inverted index (as .json):
 
-    {
-        token: [
-            # instance details
-            (collection path::str, document index in collection::int, sentence index in doc::int),
+    { 
+        token::str{
+            collection_path::str:[
+                (document index::int, sentence index in doc::int),  # instance
+                ...
+            ],  # all instances the token appears in the collection
             ...
-        ],
+        },
         ...
     }
 
@@ -27,10 +32,11 @@ import pathlib
 import typing
 from collections import defaultdict
 from functools import reduce
-from itertools import chain
-from copy import deepcopy
+from functools import partial
+from multiprocessing import Pool
+from itertools import cycle
 
-import spacy
+from tqdm import tqdm
 
 
 def main():
@@ -38,6 +44,7 @@ def main():
     # ------
     # load the configs
     # ------
+
 
     with open("inverted_index_configs.json", "r") as f:
         configs: list[dict] = json.load(f)
@@ -47,8 +54,11 @@ def main():
     # ------
     for config in configs:
 
+        config_name:str = pathlib.Path(config["name"])
         input_dir = pathlib.Path(config["input_dir"]).expanduser()
         output_dir = pathlib.Path(config["output_dir"]).expanduser()
+        n_processes:int = int(config["n_processes"])
+        tokens_of_interest: list[str] = config["tokens_of_interest"]
 
         # already sampled ... skip
         if output_dir.exists():
@@ -58,40 +68,60 @@ def main():
 
         else:
 
-            # iterable of collections paths
+            print(f"getting inverted index for {config_name}")
+
+            # iterable of collections paths in input_dir
             collections_paths: list[pathlib.Path] = [
                 p for p in input_dir.glob("*.json") if p.name != "config.json"
             ]
 
-            # get indexes for each collection path
-            indices: list[dict] = [
-                get_index(collection_path) for collection_path in collections_paths
-            ]
+            # get a list of inverted indices for each collection in input_dir
+            print(f"\tassembling indices for each collection...")
+            if n_processes == 1:
 
-            # accumulate into 
-            index = reduce(combine_indices, indices)
+                # single-threaded index assembly
+                indices: list[dict] = []
+                for collection_path in tqdm(collections_paths):
+                    indices.append(get_index(collection_path, tokens_of_interest))
+
+            else:
+
+                # multi-threaded index assembly
+                with Pool(n_processes) as p:
+                    indices = p.starmap(get_index, zip(collections_paths, cycle([tokens_of_interest])))
+
+            print(f"\tassembling smaller indices into one larger index")
+
+            # create global hash
+            big_index = defaultdict(lambda: defaultdict(list))
+            for collection_path, index in indices:
+                for token, v in index.items():
+                    big_index[token][collection_path] += v
 
             # create the output dir
             output_dir.mkdir(exist_ok=True, parents=True)
 
             # save
             with open(output_dir / "inverted_index.json", "w") as f:
-                json.dump(index, f, indent=4, ensure_ascii=True)
+                json.dump(big_index, f, ensure_ascii=False)
 
 
-def get_index(collection_path: pathlib.Path):
-    """Return an index of token wrt., the collection at collection_path.
+def get_index(collection_path: pathlib.Path, tokens_of_interest: list[str])->tuple:
+    """Return an index of tokens_of_interest wrt., the collection at collection_path.
 
     Args:
+        collection_path
+        tokens_of_interest
 
-    Return:
+    Return the tuple (collection_path::str, index), where index is:
+
         {
-            token: [
-                (collection path::str, doc index::int, sent index::int),
+            token::str: [
+                (document index::int, sentence index in doc::int),  # instance
+                    ...
+            ],  # all instances the token appears in the collection
                 ...
-            ],
-            ...
-        }
+        } 
     """
 
     index = defaultdict(list)
@@ -102,20 +132,10 @@ def get_index(collection_path: pathlib.Path):
     for i, (label, doc) in enumerate(collection):
         for j, sent in enumerate(doc):
             for token in set(sent):
-                index[token].append((str(collection_path), i, j))
+                if token in tokens_of_interest or len(tokens_of_interest)==0:
+                    index[token].append((i, j))
 
-    return index
-
-
-def combine_indices(indexA:defaultdict, indexB:defaultdict):
-    """Return a single index, from an iterable of indices."""
-
-    index = deepcopy(indexA)
-
-    for token in indexB.keys():
-        index[token] += indexB[token]
-
-    return index
+    return (str(collection_path), index)
 
 
 if __name__ == "__main__":

@@ -2,32 +2,39 @@
 
 For each config in [inverted_index_configs.json](inverted_index_configs.json), create an inverted index of the form:
 ```
-{
-    token: [
-        # instance details
-        (collection path::str, document index in collection::int, sentence index in doc::int),
+{ 
+    token::str{
+        collection_path::str:[
+            (document index::int, sentence index in doc::int),  # instance
+            ...
+        ],  # all instances the token appears in the collection
         ...
-    ],
+    },
     ...
 }
 ```
 
-from a set of tokenised collection, each collection (.json) of the form:
+from a dir of tokenised collections (i.e., from the tokenize module), each collection (.json) of the form:
 
 ```
     [
-        # document 
         [
-            label,
-            list of tokenised sentences as lists
-        ],
+            document label::str,
+            [
+                [], # sentence as a list of tokens
+                ...
+            ]  # list of sentences
+        ], # document in the collection 
         ...
-    ]
-
-    Returning:
+    ]  # collection
 ```
 
 ## Run
 ```
 python3 inverted_index.py
 ```
+
+## config notes:
+
+* All instances of config.json in config["input_dir"] are ignored
+* where "tokens_of_interest" in config is non-blank, only those words are collected in the index.
