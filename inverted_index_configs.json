@@ -3,7 +3,7 @@
         "name":"publication_date_content__sabio_distribution__tokenized",
         "input_dir": "~/Data/Feature_Exploration/tokenize/publication_date_content__sabio_distribution__tokenized/",
         "output_dir": "~/Data/Feature_Exploration/inverted_index/publication_date_content__sabio_distribution__tokenized",
-        "tokens_of_interest": [],
+        "tokens_of_interest": ["hondje"],
         "n_processes": 8
     }
 ]

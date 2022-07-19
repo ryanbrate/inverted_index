@@ -101,9 +101,14 @@ def main():
             # create the output dir
             output_dir.mkdir(exist_ok=True, parents=True)
 
-            # save
+            # save the index
             with open(output_dir / "inverted_index.json", "w") as f:
                 json.dump(big_index, f, ensure_ascii=False)
+
+            # save a copy of the config
+            with open(output_dir / "config.json", "w") as f:
+                json.dump(config, f, ensure_ascii=False)
+
 
 
 def get_index(collection_path: pathlib.Path, tokens_of_interest: list[str])->tuple:
